@@ -1,0 +1,98 @@
+% Step 1: Load the mammogram image
+img = imread('file:///MATLAB Drive/s3.jpeg'); % Replace with your image path
+imshow(img);
+title('Original Mammogram Image');
+
+% Step 2: Convert to grayscale if the image is RGB
+if size(img, 3) == 3
+img = rgb2gray(img);
+end
+
+% Step 3: Enhance Image (Histogram Equalization)
+img_eq = histeq(img); % Enhance image contrast
+figure;
+imshow(img_eq);
+title('Enhanced Mammogram Image');
+
+% Step 4: Apply Median Filter for Noise Removal
+img_filtered = medfilt2(img_eq, [3 3]); % Median filter
+figure;
+imshow(img_filtered);
+title('Filtered Image');
+
+% Step 5: Perform Edge Detection (Canny)
+edges = edge(img_filtered, 'Canny');
+figure;
+imshow(edges);% Step 4: Apply Median Filter for Noise Removal
+img_filtered = medfilt2(img_eq, [3 3]); % Median filter
+figure;
+imshow(img_filtered);
+title('Filtered Image');
+title('Canny Edge Detection');
+
+
+% Step 6: Apply Morphological Operations (Dilate to close gaps)
+se = strel('disk', 5); % Structuring element
+dilated = imdilate(edges, se); % Dilation to fill gaps in edges
+filled = imfill(dilated, 'holes'); % Fill holes in detected regions
+
+% Step 7: Label Connected Components
+[labeledImage, numRegions] = bwlabel(filled); % Label connected components
+stats = regionprops(labeledImage, 'Area', 'Centroid', 'BoundingBox', 'Perimeter');
+
+% Step 8: Extract Features (Area, Circularity, Perimeter)
+features = zeros(numRegions, 3); % Feature matrix: [Area, Circularity, Perimeter]
+for k = 1:numRegions
+% Area of the detected region
+features(k, 1) = stats(k).Area;
+
+% Circularity: (4 * pi * Area) / Perimeter^2
+    perimeter = stats(k).Perimeter;
+    circularity = (4 * pi * features(k, 1)) / (perimeter^2);
+features(k, 2) = circularity;
+
+% Perimeter of the detected region
+features(k, 3) = perimeter;
+end
+% Step 9: Classification (Benign vs Malignant Differentiation)
+threshold_area = 100; % Minimum area for detection
+threshold_circularity = 0.5; % Circularity threshold for tumors
+malignant_area_threshold = 500; % Larger area indicates potential malignancy
+malignant_circularity_threshold = 0.3; % Lower circularity indicates malignancy
+% Step10:Classify regions based on area and circularity
+labels = zeros(numRegions, 1); % 0 = Normal, 1 = Benign, 2 = Malignant
+for k = 1:numRegions
+    area = features(k, 1);
+    circularity = features(k, 2);
+
+if area >threshold_area&& circularity >threshold_circularity
+if area >malignant_area_threshold&& circularity <malignant_circularity_threshold
+            labels(k) = 2; % Malignant
+else
+            labels(k) = 1; % Benign
+end
+else
+        labels(k) = 0; % Normal
+end
+end
+
+% Step 11: Visualize the Classification
+figure;
+imshow(img);
+hold on;
+for k = 1:numRegions
+if labels(k) == 1
+% Benign (Yellow)
+rectangle('Position', stats(k).BoundingBox, 'EdgeColor', 'y', 'LineWidth', 2);
+elseif labels(k) == 2
+% Malignant (Red)
+rectangle('Position', stats(k).BoundingBox, 'EdgeColor', 'r', 'LineWidth', 2);
+else
+% Normal (Blue)
+
+rectangle('Position', stats(k).BoundingBox, 'EdgeColor', 'b', 'LineWidth', 2);
+end
+end
+title('Classification Results (Blue = Normal, Yellow = Benign, Red = Malignant)');
+hold off;
+
